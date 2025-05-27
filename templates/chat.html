@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="fa" class="bg-gray-200 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=0.8">
+  <title>Chat | SoyuzMessenger</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+<script>
+    tailwind.config = {
+      darkMode: 'class'
+    }
+</script>
+  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+</head>
+<body class="w-full min-h-screen flex flex-col items-center justify-center p-4 bg-gray-250 dark:bg-gray-900">
+<!-- باکس چت -->
+<div class="w-full max-w-4xl h-[90vh] bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-2xl shadow-lg flex flex-col justify-between overflow-hidden transition-all duration-300">
+    <!-- هدر -->
+    <div class="p-4 flex justify-between items-center border-b border-gray-300 dark:border-gray-700">
+      <div class="flex items-center space-x-4">
+        <div class="w-10 h-10 rounded-full overflow-hidden bg-gray-200 dark:bg-gray-600">
+          <img id="chatProfilePicture" src="https://via.placeholder.com/100" class="w-full h-full object-cover" />
+        </div>
+        <div>
+          <h2 id="chatDisplayName" class="text-sm sm:text-base font-semibold">{{ name }}</h2>
+          <button id="editProfileBtn" class="text-xs text-blue-500 hover:underline">ویرایش</button>
+        </div>
+      </div>
+      <div class="flex items-center space-x-4">
+        <button onclick="toggleDark()" class="text-lg">🌓</button>
+        <p id="userCount" class="text-xs text-gray-600 dark:text-gray-400">Online: 0</p>
+        <a href="/auth/logout" class="text-xs text-red-500 hover:underline">خروج</a>
+      </div>
+    </div>
+
+    <!-- پیام‌ها -->
+    <ul id="messages" class="flex-1 overflow-y-auto p-4 space-y-2 bg-gray-50 dark:bg-gray-700"></ul>
+
+    <!-- ورودی پیام -->
+    <div class="p-4 bg-gray-300 dark:bg-gray-800 border-t border-gray-200 dark:border-gray-800 flex space-x-2 transition-all duration-300">
+      <input
+        id="message"
+        placeholder="پیامتو بنویس..."
+        class="flex-1 rounded-lg p-2 bg-gray-200 dark:bg-gray-600 text-black dark:text-white placeholder-gray-500 dark:placeholder-gray-300 border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-400 dark:focus:ring-blue-600"
+      />
+      <button
+        id="sendButton"
+        class="bg-blue-500 text-white dark:bg-blue-700 px-4 py-2 rounded-lg hover:bg-blue-600 dark:hover:bg-blue-800 transition-all duration-200"
+      >
+        ارسال
+      </button>
+    </div>
+
+
+
+  <!-- مودال پروفایل -->
+  <div id="editProfileModal" class="fixed inset-0 hidden z-50 flex items-center justify-center bg-black bg-opacity-50">
+       <div class="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md space-y-4 shadow-xl">
+        <h3 class="text-base sm:text-lg md:text-xl font-bold text-center">ویرایش پروفایل</h3>
+      <div class="flex items-center space-x-4">
+        <div class="w-16 h-16 rounded-full overflow-hidden bg-gray-100 dark:bg-gray-700">
+          <img id="profilePicturePreview" src="https://via.placeholder.com/100" class="w-full h-full object-cover" />
+        </div>
+        <label for="profilePicture" class="cursor-pointer text-sm sm:text-base text-blue-600 hover:underline">انتخاب عکس</label>
+        <input type="file" id="profilePicture" class="hidden" accept="image/*" />
+      </div>
+      <div>
+        <label for="displayName" class="block text-sm sm:text-base font-medium">نام نمایشی</label>
+        <input id="displayName" type="text" class="w-full mt-1 p-2 rounded-lg bg-gray-300 dark:bg-gray-700 text-purple-800 dark:text-gray-100" placeholder="{{ name }}" />
+      </div>
+      <div class="flex justify-end space-x-2">
+        <button onclick="closeEditProfileModal()" class="px-4 py-2 bg-gray-300 dark:bg-gray-700 rounded-lg text-sm sm:text-base">انصراف</button>
+        <button onclick="saveProfile()" class="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm sm:text-base">ذخیره</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- اسکریپت -->
+  <script>
+    const PROFILE_PICTURE_KEY = 'currentProfilePicture';
+    const username = "{{ username }}";
+    let currentDisplayName = "{{ name }}";
+
+    function toggleDark() {
+      document.documentElement.classList.toggle("dark");
+      localStorage.setItem("darkMode", document.documentElement.classList.contains("dark") ? "true" : "false");
+    }
+
+
+    function openEditProfileModal() {
+      document.getElementById("editProfileModal").classList.remove("hidden");
+      const preview = document.getElementById("profilePicturePreview");
+      const mainImg = document.getElementById("chatProfilePicture");
+      if (preview && mainImg) preview.src = mainImg.src;
+    }
+
+    function closeEditProfileModal() {
+      document.getElementById("editProfileModal").classList.add("hidden");
+    }
+
+    function saveProfile() {
+      const displayName = document.getElementById("displayName").value;
+      const file = document.getElementById("profilePicture").files[0];
+      const formData = new FormData();
+      formData.append("username", username);
+      formData.append("displayName", displayName);
+      if (file) formData.append("profilePicture", file);
+
+      fetch("/auth/update_profile", {
+        method: "POST",
+        body: formData
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.success) {
+            document.querySelectorAll("#chatDisplayName, #displayName").forEach(el => {
+                if (el) el.textContent = displayName;
+            });
+
+
+            const url = window.location.origin + '/' + data.profile_picture;
+            document.getElementById("chatProfilePicture").src = url;
+            document.getElementById("profilePicturePreview").src = url;
+            localStorage.setItem(PROFILE_PICTURE_KEY, url);
+            closeEditProfileModal();
+            setTimeout(() => {
+              window.location.reload();
+            }, 600); // 0.5 ثانیه بعد از ذخیره، رفرش نرم
+          }
+        });
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+
+      document.documentElement.classList.add("transition-colors", "duration-500");
+
+        if (localStorage.getItem("darkMode") === "true") {
+          document.documentElement.classList.add("dark");
+        }
+
+      const socket = io();
+      const messageInput = document.getElementById("message");
+      const messages = document.getElementById("messages");
+
+      // دکمه‌ها
+      document.getElementById("sendButton").onclick = () => {
+        if (messageInput.value.trim() !== "") {
+            socket.send({
+              sender: username,
+              msg: messageInput.value.trim(),
+              sender_name: currentDisplayName
+            });
+
+
+          messageInput.value = "";
+        }
+      };
+
+      document.getElementById("editProfileBtn").onclick = openEditProfileModal;
+
+      document.getElementById("profilePicture").addEventListener("change", function () {
+        const file = this.files[0];
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          document.getElementById("profilePicturePreview").src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      });
+
+      // دریافت پروفایل
+      fetch(`/get_profile?username=${username}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            const url = window.location.origin + '/' + data.profile_picture;
+            document.getElementById("chatDisplayName").textContent = data.name;
+            document.getElementById("chatProfilePicture").src = url;
+            localStorage.setItem(PROFILE_PICTURE_KEY, url);
+          }
+        });
+
+      // اتصال به سرور
+      socket.emit("join", { username });
+
+      socket.on("online_users", (data) => {
+        const userCountElement = document.getElementById("userCount");
+        if (userCountElement) {
+            userCountElement.textContent = `Online: ${data.count}`;
+        }
+    });
+
+      socket.on("message", (data) => {
+        const li = document.createElement("li");
+        li.className = "flex " + (data.sender_username === username ? "justify-end" : "justify-start");
+
+        const container = document.createElement("div");
+        container.className = "flex items-start gap-3 " +
+          (data.sender_username === username ? "flex-row-reverse" : "");
+
+        if (!data.is_system) {
+          const avatar = document.createElement("img");
+          avatar.src = data.profile_picture
+            ? window.location.origin + '/' + data.profile_picture
+              : "/static/default.png";
+          avatar.className = "w-10 h-10 rounded-full object-cover";
+          container.appendChild(avatar);
+        }
+
+        const bubbleWrapper = document.createElement("div");
+        bubbleWrapper.className = "relative max-w-[80%]";
+
+        const triangle = document.createElement("div");
+        triangle.className = "absolute top-3 w-0 h-0 border-t-[8px] border-t-transparent border-b-[8px] border-b-transparent " +
+          (data.sender_username === username
+            ? "border-l-[10px] border-l-blue-500 right-[-10px]"
+            : "border-r-[10px] border-r-gray-200 dark:border-r-gray-600 left-[-10px]");
+
+        const bubble = document.createElement("div");
+        bubble.className = "w-full p-3 rounded-xl break-words text-sm sm:text-base " +
+          (data.is_system
+            ? "bg-yellow-200 dark:bg-yellow-500 font-semibold text-gray-900 dark:text-white"
+            : data.sender_username === username
+              ? "bg-blue-500 text-white"
+              : "bg-gray-200 dark:bg-gray-600 text-black dark:text-white");
+
+         // تبدیل زمان UTC به زمان محلی و فرمت‌بندی
+        const messageTimeUTC = data.time;
+        const localDate = new Date(messageTimeUTC);
+        const formattedTime = localDate.toLocaleTimeString(); // نمایش فقط زمان محلی
+
+        bubble.innerHTML = data.is_system
+            ? `${data.msg} <br><small class="text-xs">${formattedTime}</small>`
+            : `<div class="text-right text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">${data.sender_name}</div>${data.msg}<br><small class="text-xs">${formattedTime}</small>`;
+
+        bubbleWrapper.appendChild(triangle);
+        bubbleWrapper.appendChild(bubble);
+        container.appendChild(bubbleWrapper);
+        li.appendChild(container);
+        messages.appendChild(li);
+        messages.scrollTop = messages.scrollHeight;
+      });
+  });
+  </script>
+</body>
+</html>
