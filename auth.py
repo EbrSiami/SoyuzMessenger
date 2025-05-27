@@ -6,7 +6,7 @@ import os
 auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
 
 USERS_FILE = 'users.json'
-# ساختار موقت برای نگهداری کاربران (فقط برای تست)
+# ساختار موقت برای نگهداری کاربران
 users = {} # تغییر ساختار برای ذخیره اسم هم
 if os.path.exists(USERS_FILE):
     with open(USERS_FILE, 'r') as f:
@@ -56,4 +56,4 @@ def simple_login():
 def logout():
     session.pop('username', None)
     session.pop('name', None)
-    return redirect('/') # هدایت به صفحه اصلی (احتمالاً لاگین)
+    return redirect('/') # هدایت به صفحه اصلی
